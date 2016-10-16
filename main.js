@@ -20,8 +20,9 @@ var LedCharacteristic = function() {
     value: null
   });
 
-  this._value = new Buffer(0);
-  this._updateValueCallback = null;
+    this._value = new Buffer(0);
+    this._arr_rssi = new Array(5).fill(0);
+    this._updateValueCallback = null;
 };
 
 util.inherits(LedCharacteristic, BlenoCharacteristic);
@@ -33,17 +34,23 @@ LedCharacteristic.prototype.onReadRequest = function(offset, callback) {
 };
 
 LedCharacteristic.prototype.onWriteRequest = function(data, offset, withoutResponse, callback) {
-  this._value = data;
+    this._value = data;
     hex_rssi = this._value.toString('hex');
     int_rssi = parseInt(hex_rssi, 16);
 
-    if(int_rssi > 0 && int_rssi < 70){
+    this._arr_rssi.shift();
+    this._arr_rssi.push(int_rssi);
+    no_of_rssi = this._arr_rssi.filter(function(ele){ return ele != 0;}).length
+
+    mean_rssi = this._arr_rssi.reduce(function(p,c){return p+c;})/no_of_rssi;
+
+    if(mean_rssi > 0 && mean_rssi < 65){
 	writeColorToLED(0,0,1);
     }else{
 	writeColorToLED(1,0,0);
     }
-    
-    console.log('LedCharacteristic - onWriteRequest: value = ' + parseInt(hex_rssi, 16));
+
+    //console.log('LedCharacteristic - onWriteRequest:  current_rssi = ' + int_rssi + " mean_rssi = " + mean_rssi + " arr_rssi = " + this._arr_rssi);
     
   if (this._updateValueCallback) {
     console.log('LedCharacteristic - onWriteRequest: notifying');
@@ -80,8 +87,12 @@ bleno.on('advertisingStart', function(error) {
   }
 });
 
+bleno.on('disconnect', function(address){
+    console.log("disconnect: " + address);
+    writeColorToLED(0,0,0);
+});
+
 var writeColorToLED = function(red, green, blue){
-    console.log(red + " " + green + " " + blue);
     red_led.digitalWrite(red);
     green_led.digitalWrite(green);
     blue_led.digitalWrite(blue);
